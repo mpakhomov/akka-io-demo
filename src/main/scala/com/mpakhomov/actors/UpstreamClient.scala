@@ -1,14 +1,14 @@
-package com.mpakhomov
+package com.mpakhomov.actors
+
+import java.net.InetSocketAddress
 
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.io.{IO, Tcp}
 import akka.util.ByteString
-import java.net.InetSocketAddress
+import com.mpakhomov.actors.UpstreamClient.CloseCommand
+import com.typesafe.config.ConfigFactory
 
-import akka.actor.Actor.Receive
-import akka.event.Logging
-
-class UpstreamClient(remote: InetSocketAddress, listener: ActorRef) extends Actor with ActorLogging {
+class UpstreamClient(remote: InetSocketAddress, eventProcessor: ActorRef) extends Actor with ActorLogging {
 
   import Tcp._
   import context.system
@@ -17,11 +17,11 @@ class UpstreamClient(remote: InetSocketAddress, listener: ActorRef) extends Acto
 
   def receive = {
     case CommandFailed(_: Connect) =>
-      listener ! "connect failed"
+      log.error("connect failed")
       context stop self
 
     case c @ Connected(remote, local) =>
-      listener ! c
+      eventProcessor ! c
       val connection = sender()
       connection ! Register(self)
       context become {
@@ -29,13 +29,13 @@ class UpstreamClient(remote: InetSocketAddress, listener: ActorRef) extends Acto
           connection ! Write(data)
         case CommandFailed(w: Write) =>
           // O/S buffer was full
-          listener ! "write failed"
+          log.error("write failed")
         case Received(data) =>
-          listener ! data
-        case "close" =>
+          eventProcessor ! data
+        case CloseCommand =>
           connection ! Close
         case _: ConnectionClosed =>
-          listener ! "connection closed"
+          log.info("Connection closed")
           context stop self
       }
   }
@@ -43,14 +43,19 @@ class UpstreamClient(remote: InetSocketAddress, listener: ActorRef) extends Acto
 
 object UpstreamClient {
 
+  case object CloseCommand
+
   def props(remote: InetSocketAddress, replies: ActorRef) =
     Props(classOf[UpstreamClient], remote, replies)
 
   def main(args: Array[String]): Unit = {
+    val config = ConfigFactory.load()
     val system = ActorSystem("akka-io-demo")
-    val listener = system.actorOf(UpstreamEventsListener.props())
-    val inetSocketAddress = new InetSocketAddress("localhost", 5555)
-    val upstreamClient = system.actorOf(UpstreamClient.props(inetSocketAddress, listener))
+    val eventProcessor = system.actorOf(EventProcessor.props())
+    val inetSocketAddress = new InetSocketAddress(
+      config.getString("app.upstream.hostname"),
+      config.getInt("app.upstream.port"))
+    val upstreamClient = system.actorOf(UpstreamClient.props(inetSocketAddress, eventProcessor))
   }
 
 }

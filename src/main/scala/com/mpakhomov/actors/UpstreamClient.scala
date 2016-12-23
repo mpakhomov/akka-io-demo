@@ -51,7 +51,8 @@ object UpstreamClient {
   def main(args: Array[String]): Unit = {
     val config = ConfigFactory.load()
     val system = ActorSystem("akka-io-demo")
-    val eventProcessor = system.actorOf(EventProcessor.props())
+    val candlestickAggregator = system.actorOf(CandlestickAggregator.props(config.getInt("app.keep-data-minutes")))
+    val eventProcessor = system.actorOf(EventProcessor.props(candlestickAggregator))
     val inetSocketAddress = new InetSocketAddress(
       config.getString("app.upstream.hostname"),
       config.getInt("app.upstream.port"))

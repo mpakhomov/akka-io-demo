@@ -1,18 +1,47 @@
 package com.mpakhomov.actors
 
-import akka.actor.{Actor, ActorLogging, Props}
-import akka.util.ByteString
+import java.sql.Timestamp
+import java.time.{LocalDateTime, LocalTime}
+import java.time.temporal.ChronoUnit
 
-class EventProcessor extends Actor with ActorLogging {
+import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.util.ByteString
+import model.UpstreamMessage
+
+class EventProcessor(val candlestickAggregator: ActorRef) extends Actor with ActorLogging {
   override def receive: Receive = {
     case data: ByteString => processEvent(data)
   }
 
   def processEvent(data: ByteString): Unit = {
-    log.info(data.utf8String)
+    try {
+      val msg = parse(data)
+      candlestickAggregator ! msg
+    } catch {
+      case ex: Throwable => log.error(ex, s"Error parsing message: ${ex.getMessage}")
+    }
   }
+
+  def parse(data: ByteString) = {
+    val len = data.take(2).asByteBuffer.getShort
+    // get actual message, drop first 2 bytes which contain the length of the message
+    val msg = data.drop(2).take(len)
+    val ts = new Timestamp(msg.slice(0, 8).asByteBuffer.getLong)
+    val tickerLen = msg.slice(8, 10).asByteBuffer.getShort
+    val ticker = msg.slice(10, 10 + tickerLen).utf8String
+    val priceStart = 10 + tickerLen
+    val price: Double = msg.slice(priceStart, priceStart + 8).asByteBuffer.getDouble
+    val sizeStart = priceStart + 8
+    val size: Int = msg.slice(sizeStart, sizeStart + 4).asByteBuffer.getInt
+    log.info(s"$ts $ticker $price $size")
+    UpstreamMessage(truncateTimestamp(ts), ticker, price, size)
+  }
+
+  def truncateTimestamp(ts: Timestamp): Timestamp =
+    new Timestamp(ts.getTime - (ts.getTime % (60 * 1000)))
+
 }
 
 object EventProcessor {
-  def props(): Props = Props(classOf[EventProcessor])
+  def props(candlestickAggregator: ActorRef): Props = Props(new EventProcessor(candlestickAggregator))
 }

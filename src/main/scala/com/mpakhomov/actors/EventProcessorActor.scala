@@ -6,7 +6,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.util.ByteString
 import model.UpstreamMessage
 
-class EventProcessor(val candlestickAggregator: ActorRef) extends Actor with ActorLogging {
+class EventProcessorActor(val candlestickAggregator: ActorRef) extends Actor with ActorLogging {
   override def receive: Receive = {
     case data: ByteString => processEvent(data)
   }
@@ -41,6 +41,6 @@ class EventProcessor(val candlestickAggregator: ActorRef) extends Actor with Act
 
 }
 
-object EventProcessor {
-  def props(candlestickAggregator: ActorRef): Props = Props(new EventProcessor(candlestickAggregator))
+object EventProcessorActor {
+  def props(candlestickAggregator: ActorRef): Props = Props(new EventProcessorActor(candlestickAggregator))
 }

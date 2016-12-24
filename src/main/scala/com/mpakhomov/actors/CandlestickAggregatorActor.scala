@@ -1,7 +1,7 @@
 package com.mpakhomov.actors
 
 import akka.actor.{Actor, ActorLogging, Props}
-import com.mpakhomov.actors.CandlestickAggregator.{GetDataForLastMinute, GetDataForLastNMinutes}
+import com.mpakhomov.actors.CandlestickAggregatorActor.{GetDataForLastMinute, GetDataForLastNMinutes}
 import com.mpakhomov.collection.CircularBuffer
 import com.mpakhomov.model.Candlestick
 import model.UpstreamMessage
@@ -9,7 +9,7 @@ import model.UpstreamMessage
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-class CandlestickAggregator(val keepDataMinutes: Int = 10) extends Actor with ActorLogging {
+class CandlestickAggregatorActor(val keepDataMinutes: Int = 10) extends Actor with ActorLogging {
 
   // type alias for convenience
   type Candlesticks = mutable.LinkedHashMap[String, Candlestick]
@@ -56,12 +56,12 @@ class CandlestickAggregator(val keepDataMinutes: Int = 10) extends Actor with Ac
   def getDataForLastMinute(): Seq[Candlestick] = ringBuffer.get(ringBuffer.size() - 1).values.toSeq
 }
 
-object CandlestickAggregator {
+object CandlestickAggregatorActor {
 
   // messages
   case class ProcessNewMessage(msg: UpstreamMessage)
   case object GetDataForLastNMinutes
   case object GetDataForLastMinute
 
-  def props(keepDataMinutes: Int): Props = Props(new CandlestickAggregator(keepDataMinutes))
+  def props(keepDataMinutes: Int): Props = Props(new CandlestickAggregatorActor(keepDataMinutes))
 }

@@ -14,6 +14,9 @@ class CandlestickAggregator(val keepDataMinutes: Int = 10) extends Actor with Ac
   // type alias for convenience
   type Candlesticks = mutable.LinkedHashMap[String, Candlestick]
 
+  // our requirement is to keep data for the last 10 minutes. Circular Buffer (Ring Buffer) is a good fit.
+  // it keeps data only for the last 10 minutes. when it runs out of space, old data gets overwritten with
+  // new data. it means that we don't need to implement any kind of eviction policy to get rid of old data
   val ringBuffer = new CircularBuffer[Candlesticks](keepDataMinutes)
 
   override def receive: Receive = {
@@ -22,8 +25,12 @@ class CandlestickAggregator(val keepDataMinutes: Int = 10) extends Actor with Ac
     case GetDataForLastMinute => getDataForLastMinute()
   }
 
+  // process new incoming message from upstream tcp server. convert the message to candlestick format
+  // and aggregate it (store it in the ring buffer)
   def processNewMessage(msg: UpstreamMessage): Unit = {
-    val candlesticks = ringBuffer.get(keepDataMinutes - 1)
+    if (ringBuffer.isEmpty) ringBuffer.offer(new Candlesticks)
+    val ringBufferLastElemIndex = ringBuffer.size() - 1
+    val candlesticks = ringBuffer.get(ringBufferLastElemIndex)
     if (!candlesticks.contains(msg.ticker)) {
       candlesticks(msg.ticker) = Candlestick(ticker = msg.ticker, timestamp = msg.ts, open = msg.price,
         high = msg.price, low = msg.price, close = msg.price, volume = msg.size)
@@ -37,6 +44,7 @@ class CandlestickAggregator(val keepDataMinutes: Int = 10) extends Actor with Ac
     }
   }
 
+  // when new client connects to the server we should serve candlesticks for the last N minutes (10, by default)
   def getDataForLastNMinutes(): Seq[Candlestick] = {
     import scala.collection.JavaConverters._
     val buf = new ArrayBuffer[Candlestick]()
@@ -44,11 +52,13 @@ class CandlestickAggregator(val keepDataMinutes: Int = 10) extends Actor with Ac
     buf
   }
 
-  def getDataForLastMinute(): Seq[Candlestick] = ringBuffer.get(keepDataMinutes - 1).values.toSeq
+  // every minute we should serve to the clients all candlesticks for the last minute
+  def getDataForLastMinute(): Seq[Candlestick] = ringBuffer.get(ringBuffer.size() - 1).values.toSeq
 }
 
 object CandlestickAggregator {
 
+  // messages
   case class ProcessNewMessage(msg: UpstreamMessage)
   case object GetDataForLastNMinutes
   case object GetDataForLastMinute

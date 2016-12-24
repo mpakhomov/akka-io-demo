@@ -5,6 +5,7 @@ import java.net.InetSocketAddress
 import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
 import akka.io.{IO, Tcp}
 import akka.util.ByteString
+import com.mpakhomov.actors.CandlestickAggregator.GetDataForLastNMinutes
 import com.mpakhomov.actors.UpstreamClient.CloseCommand
 import com.typesafe.config.ConfigFactory
 
@@ -43,6 +44,9 @@ class UpstreamClient(remote: InetSocketAddress, eventProcessor: ActorRef) extend
 
 object UpstreamClient {
 
+  val cronJobName = "EveryMinute"
+
+  // messages
   case object CloseCommand
 
   def props(remote: InetSocketAddress, replies: ActorRef) =
@@ -57,6 +61,11 @@ object UpstreamClient {
       config.getString("app.upstream.hostname"),
       config.getInt("app.upstream.port"))
     val upstreamClient = system.actorOf(UpstreamClient.props(inetSocketAddress, eventProcessor))
+
+    // schedule a job that runs at the beginning of every minute
+    import com.typesafe.akka.extension.quartz.QuartzSchedulerExtension
+    val scheduler = QuartzSchedulerExtension(system)
+    scheduler.schedule(cronJobName, candlestickAggregator, GetDataForLastNMinutes)
   }
 
 }

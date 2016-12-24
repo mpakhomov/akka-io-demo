@@ -1,8 +1,6 @@
 package com.mpakhomov.actors
 
 import java.sql.Timestamp
-import java.time.{LocalDateTime, LocalTime}
-import java.time.temporal.ChronoUnit
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.util.ByteString
@@ -37,6 +35,7 @@ class EventProcessor(val candlestickAggregator: ActorRef) extends Actor with Act
     UpstreamMessage(truncateTimestamp(ts), ticker, price, size)
   }
 
+  // truncate timestamp: discard its seconds part
   def truncateTimestamp(ts: Timestamp): Timestamp =
     new Timestamp(ts.getTime - (ts.getTime % (60 * 1000)))
 

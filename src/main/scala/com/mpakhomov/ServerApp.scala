@@ -4,10 +4,11 @@ import java.net.InetSocketAddress
 
 import akka.actor.ActorSystem
 import com.mpakhomov.actors.CandlestickAggregatorActor.GetDataForLastNMinutes
-import com.mpakhomov.actors.{CandlestickAggregatorActor, EventProcessorActor, UpstreamClientActor}
+import com.mpakhomov.actors.ServerActor.SendDataForLastOneMinute
+import com.mpakhomov.actors.{CandlestickAggregatorActor, EventProcessorActor, ServerActor, UpstreamClientActor}
 import com.typesafe.config.ConfigFactory
 
-object UpstreamClientApp {
+object ServerApp {
 
   val cronJobName = "EveryMinute"
 
@@ -20,10 +21,15 @@ object UpstreamClientApp {
       config.getString("app.upstream.hostname"),
       config.getInt("app.upstream.port"))
     val upstreamClient = system.actorOf(UpstreamClientActor.props(inetSocketAddress, eventProcessor))
+    val server = system.actorOf(ServerActor.props(
+      new InetSocketAddress(config.getInt("app.server.port")),
+      candlestickAggregator
+    ))
+
 
     // schedule a job that runs at the beginning of every minute
     import com.typesafe.akka.extension.quartz.QuartzSchedulerExtension
     val scheduler = QuartzSchedulerExtension(system)
-    scheduler.schedule(cronJobName, candlestickAggregator, GetDataForLastNMinutes)
+    scheduler.schedule(cronJobName, server, SendDataForLastOneMinute)
   }
 }

@@ -26,8 +26,6 @@ class UpstreamClientActor(remote: InetSocketAddress, eventProcessor: ActorRef) e
       val connection = sender()
       connection ! Register(self)
       context become {
-        case data: ByteString =>
-          connection ! Write(data)
         case CommandFailed(w: Write) =>
           // O/S buffer was full
           log.error("write failed")

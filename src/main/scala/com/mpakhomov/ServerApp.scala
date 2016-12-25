@@ -4,7 +4,7 @@ import java.net.InetSocketAddress
 
 import akka.actor.ActorSystem
 import com.mpakhomov.actors.CandlestickAggregatorActor.GetDataForLastNMinutes
-import com.mpakhomov.actors.ServerActor.SendDataForLastOneMinute
+import com.mpakhomov.actors.ServerActor.SendDataForLastMinute
 import com.mpakhomov.actors.{CandlestickAggregatorActor, EventProcessorActor, ServerActor, UpstreamClientActor}
 import com.typesafe.config.ConfigFactory
 
@@ -30,6 +30,6 @@ object ServerApp {
     // schedule a job that runs at the beginning of every minute
     import com.typesafe.akka.extension.quartz.QuartzSchedulerExtension
     val scheduler = QuartzSchedulerExtension(system)
-    scheduler.schedule(cronJobName, server, SendDataForLastOneMinute)
+    scheduler.schedule(cronJobName, server, SendDataForLastMinute)
   }
 }

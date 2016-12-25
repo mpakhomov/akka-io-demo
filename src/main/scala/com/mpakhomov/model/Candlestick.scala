@@ -11,6 +11,6 @@ case class Candlestick(
   high: Double,
   low: Double,
   close: Double,
-  volume: Long
+  volume: Long // another option is to use BigDecimal. but for the sake of this task, `long` is good enough
 )
 

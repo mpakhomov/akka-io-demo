@@ -1,6 +1,7 @@
 package com.mpakhomov.actors
 
 import java.net.InetSocketAddress
+import java.text.DecimalFormat
 import java.time.format.DateTimeFormatter
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
@@ -24,7 +25,7 @@ class ServerActor(val addr: InetSocketAddress, val candlestickAggregatorActor: A
   val clients = ListBuffer[ActorRef]()
 
   // for ask `?` syntax and futures
-  implicit val timeout = Timeout(30.minutes)
+  implicit val timeout = Timeout(1.minutes)
 
   IO(Tcp) ! Bind(self, addr)
 
@@ -33,7 +34,7 @@ class ServerActor(val addr: InetSocketAddress, val candlestickAggregatorActor: A
       log.error("CommandFailed")
       context stop self
     case c @ Connected(remote, local) => handleNewConnection(sender())
-    case SendDataForLastOneMinute => sendDataForLastMinute()
+    case SendDataForLastMinute => sendDataForLastMinute()
   }
 
   def handleNewConnection(connection: ActorRef): Unit = {
@@ -43,7 +44,7 @@ class ServerActor(val addr: InetSocketAddress, val candlestickAggregatorActor: A
     log.info("New client connected. Sending data for the last 10 minutes")
     val future = (candlestickAggregatorActor ? GetDataForLastNMinutes).mapTo[Seq[Candlestick]]
     val data = Await.result(future, timeout.duration)
-    val jsonStr = data.map(candleStick2Json(_)).mkString("\n")
+    val jsonStr = buildJsonStr(data)
     log.info(s"Sending to the client:\n$jsonStr")
     connection ! Write(ByteString(jsonStr))
   }
@@ -51,7 +52,7 @@ class ServerActor(val addr: InetSocketAddress, val candlestickAggregatorActor: A
   def sendDataForLastMinute(): Unit = {
     val future = (candlestickAggregatorActor ? GetDataForLastMinute).mapTo[Seq[Candlestick]]
     val data = Await.result(future, timeout.duration)
-    val jsonStr = data.map(candleStick2Json(_)).mkString("\n")
+    val jsonStr = buildJsonStr(data)
     log.info(s"Sending to the clients:\n$jsonStr")
     for (m <- clients) m ! Write(ByteString(jsonStr))
   }
@@ -60,7 +61,7 @@ class ServerActor(val addr: InetSocketAddress, val candlestickAggregatorActor: A
 object ServerActor {
 
   // messages
-  case object SendDataForLastOneMinute
+  case object SendDataForLastMinute
 
   def props(addr: InetSocketAddress, candlestickAggregator: ActorRef) =
     Props(classOf[ServerActor], addr, candlestickAggregator)
@@ -69,10 +70,20 @@ object ServerActor {
     // datetime format looks similar to ISO_INSTANT, but not exactly the same
     // to https://docs.oracle.com/javase/8/docs/api/java/time/format/DateTimeFormatter.html
     val dt = c.timestamp.toLocalDateTime
-    val dtf1 = DateTimeFormatter.ofPattern("YYYY-MM-dd")
-    val dtf2 = DateTimeFormatter.ofPattern("mm:ss")
+    val dtf1 = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    val dtf2 = DateTimeFormatter.ofPattern("HH:mm")
     val timestamp =  dt.format(dtf1) + "T" + dt.format(dtf2) + ":00Z"
-    s"""{ "ticker": ${c.ticker}, "timestamp": ${timestamp}, "open": ${c.open}, "high": ${c.high}""" +
-    s""" "low": ${c.low}, "close": ${c.close}, "volume": ${c.volume} }"""
+
+    // just in case: format doubles exactly at it is in the spec
+    val formatter = new DecimalFormat("#.#")
+    val open = formatter.format(c.open)
+    val low = formatter.format(c.low)
+    val high = formatter.format(c.high)
+    val close = formatter.format(c.close)
+    s"""{ "ticker": "${c.ticker}", "timestamp": "${timestamp}", "open": ${open}, "high": ${high},""" +
+    s""" "low": ${low}, "close": ${close}, "volume": ${c.volume} }"""
   }
+
+  // I extracted it to a function, so that it's easier to verify in my integration testing
+  def buildJsonStr(data: Seq[Candlestick]): String = data.map(candleStick2Json(_)).mkString("\n")
 }

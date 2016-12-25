@@ -10,7 +10,7 @@ import akka.util.{ByteString, Timeout}
 import com.mpakhomov.actors.CandlestickAggregatorActor.{GetDataForLastMinute, GetDataForLastNMinutes}
 import com.mpakhomov.model.Candlestick
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -21,8 +21,8 @@ class ServerActor(val addr: InetSocketAddress, val candlestickAggregatorActor: A
   import akka.pattern.ask
   import context.system
 
-  // list of connected clients
-  val clients = ListBuffer[ActorRef]()
+  // a set of connected clients
+  val clients = mutable.Set[ActorRef]()
 
   // for ask `?` syntax and futures
   implicit val timeout = Timeout(1.minutes)
@@ -35,6 +35,7 @@ class ServerActor(val addr: InetSocketAddress, val candlestickAggregatorActor: A
       context stop self
     case c @ Connected(remote, local) => handleNewConnection(sender())
     case SendDataForLastMinute => sendDataForLastMinute()
+    case c: ConnectionClosed => handleClientDisconnected(sender())
   }
 
   def handleNewConnection(connection: ActorRef): Unit = {
@@ -55,6 +56,11 @@ class ServerActor(val addr: InetSocketAddress, val candlestickAggregatorActor: A
     val jsonStr = buildJsonStr(data)
     log.info(s"Sending to the clients:\n$jsonStr")
     for (m <- clients) m ! Write(ByteString(jsonStr))
+  }
+
+  def handleClientDisconnected(connection: ActorRef): Unit = {
+    log.info("Client disconnected")
+    clients.remove(connection)
   }
 }
 

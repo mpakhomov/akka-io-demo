@@ -18,17 +18,21 @@ class CandlestickAggregatorActor(val keepDataMinutes: Int = 10) extends Actor wi
   // it keeps data only for the last 10 minutes. when it runs out of space, old data gets overwritten with
   // new data. it means that we don't need to implement any kind of eviction policy to get rid of old data
   val ringBuffer = new CircularBuffer[Candlesticks](keepDataMinutes)
+  // add an empty container, so that ring buffer is never empty
+  ringBuffer.offer(new Candlesticks)
 
   override def receive: Receive = {
     case msg: UpstreamMessage => processNewMessage(msg)
-    case GetDataForLastNMinutes => getDataForLastNMinutes()
-    case GetDataForLastMinute => getDataForLastMinute()
+    case GetDataForLastNMinutes => sender() ! getDataForLastNMinutes()
+    case GetDataForLastMinute =>
+      sender() ! getDataForLastMinute()
+      // one minute passed. let's add a container to keep data for the next minute
+      ringBuffer.offer(new Candlesticks)
   }
 
   // process new incoming message from upstream tcp server. convert the message to candlestick format
   // and aggregate it (store it in the ring buffer)
   def processNewMessage(msg: UpstreamMessage): Unit = {
-    if (ringBuffer.isEmpty) ringBuffer.offer(new Candlesticks)
     val ringBufferLastElemIndex = ringBuffer.size() - 1
     val candlesticks = ringBuffer.get(ringBufferLastElemIndex)
     if (!candlesticks.contains(msg.ticker)) {

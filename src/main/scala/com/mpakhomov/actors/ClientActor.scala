@@ -2,7 +2,7 @@ package com.mpakhomov.actors
 
 import java.net.InetSocketAddress
 
-import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.actor.{Actor, ActorLogging, Props}
 import akka.io.{IO, Tcp}
 
 class ClientActor(remote: InetSocketAddress) extends Actor with ActorLogging {
@@ -16,7 +16,6 @@ class ClientActor(remote: InetSocketAddress) extends Actor with ActorLogging {
     case CommandFailed(_: Connect) =>
       log.error("connect failed")
       context stop self
-
     case c @ Connected(remote, local) =>
       val connection = sender()
       connection ! Register(self)
